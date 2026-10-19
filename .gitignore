@@ -1,0 +1,4 @@
+node_modules/
+sensory-audit-output/
+test/.tmp*
+.DS_Store
