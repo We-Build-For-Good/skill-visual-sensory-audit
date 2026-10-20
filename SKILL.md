@@ -1,10 +1,10 @@
 ---
 name: visual-sensory-audit
-description: Deterministic multi-viewport sensory verification gate. Emulates mobile (375px), tablet (768px), and desktop (1440px) viewports using headless Chrome to detect horizontal layout blowouts, broken assets, touch target collisions, and uncaught console errors. Use before committing front-end code, deploying web applications, or accepting pull requests.
+description: Opens a page in headless Chrome at 375px, 768px, and 1440px and fails on rendering defects an agent cannot see from code - page not loading, horizontal overflow, broken images, failed stylesheet/script requests, JavaScript errors - and warns on undersized tap targets. Use before committing front-end code, deploying a web app, or accepting a pull request.
 license: MIT
 metadata:
   author: We Build for Good
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 # Visual Sensory Audit: Deterministic Multi-Viewport Gate
@@ -25,67 +25,36 @@ Passing unit tests verify logical invariants; visual sensory audits verify perce
 
 ---
 
-## Sensory Verification Pillars
+## What it checks
 
-### 1. Horizontal Layout Overflow Detector (`detectHorizontalOverflow`)
-* **Standard:** Mobile pages must never scroll horizontally.
-* **Invariant:** `contentWidth <= viewportWidth`.
-* **Detection:** Traverses the live DOM to identify the exact offending CSS selectors and bounding boxes pushing beyond the viewport boundary.
-* **Severity:** Fatal error on any viewport.
+| Check | Severity |
+|---|---|
+| The page does not load (HTTP error, timeout, missing entry file) | Error |
+| Horizontal overflow: the page is wider than the screen. Reports the offending elements. | Error |
+| Broken images, including lazy-loaded ones (the audit scrolls the page to load them) | Error |
+| Failed requests: any stylesheet, script, image, or other resource that fails or returns HTTP 4xx/5xx | Error |
+| Uncaught exceptions and `console.error` messages, reported once each | Error |
+| Mobile tap targets smaller than 24x24px (WCAG 2.2 success criterion 2.5.8, level AA). Use `--min-touch 44` for the stricter AAA / Apple guideline. | Warning; error with `--strict` |
 
-### 2. Broken Asset & Media Auditor (`detectBrokenImages`)
-* **Standard:** All images, icons, and media elements must resolve with positive natural dimensions.
-* **Detection:** Inspects `img.complete` and `img.naturalWidth === 0`, as well as failed HTTP asset responses.
-* **Severity:** Fatal error.
+Screenshots for each width and `sensory-report.json` are saved to `./sensory-audit-output/` (change with `--output-dir`).
 
-### 3. Touch Target Ergonomics (`detectSmallTouchTargets`)
-* **Standard:** Actionable buttons, touch controls, and form inputs on mobile viewports must meet ergonomic touch requirements (minimum 36x36px bounding box).
-* **Detection:** Evaluates interactive controls against Apple Human Interface and WCAG 2.5.5 sizing baselines.
-* **Severity:** Warning in default mode; fatal error in `--strict` mode.
-
-### 4. Runtime Console & Exception Capture
-* **Standard:** No uncaught JavaScript exceptions (`pageerror`) or `console.error` calls during initial page boot or layout reflow.
-* **Detection:** Listens to Chrome DevTools Protocol event streams and captures stack traces.
-* **Severity:** Fatal error.
-
-### 5. Multi-Viewport Visual Snapshot Proof
-* **Standard:** High-fidelity PNG snapshots captured for mobile (375x667), tablet (768x1024), and desktop (1440x900).
-* **Storage:** Saved to `./sensory-audit-output/` alongside `sensory-report.json`.
+It checks the page as it first loads. It cannot judge whether the design looks right, and it does not click through flows: look at the screenshots.
 
 ---
 
-## CLI Usage
+## How to run it
 
-### Basic Audit
-Run the audit on any local folder (automatically spins up an ephemeral static server):
 ```bash
-node /Users/lizzie/wb4g-skills/skill-visual-sensory-audit/bin/visual-audit.mjs --dir /Users/lizzie/departure-alarm
+node bin/visual-audit.mjs --dir path/to/site                    # a folder (serves index.html)
+node bin/visual-audit.mjs --dir path/to/site --file landing.html
+node bin/visual-audit.mjs https://staging.example.com/           # a live URL
+node bin/visual-audit.mjs --dir dist --strict --json             # CI
 ```
 
-### Auditing a Single HTML File
-```bash
-node /Users/lizzie/wb4g-skills/skill-visual-sensory-audit/bin/visual-audit.mjs --dir /Users/lizzie/departure-alarm --file landing.html
-```
-
-### Auditing a Remote Production or Staging URL
-```bash
-node /Users/lizzie/wb4g-skills/skill-visual-sensory-audit/bin/visual-audit.mjs https://webuildforgood.com/departure-alarm/
-```
-
-### Strict Mode & Machine-Readable Output
-```bash
-node /Users/lizzie/wb4g-skills/skill-visual-sensory-audit/bin/visual-audit.mjs --dir . --strict --json
-```
+Exit codes: `0` passed, `1` defects found, `2` bad options, `3` could not run (no Chrome, or dependencies not installed). Treat `3` as "not checked", never as a pass.
 
 ---
 
-## Integration in the Autonomous Coordinator Loop
+## Using it with the other gates
 
-When paired with `skill-system-invariant-engine`, the Visual Sensory Audit provides the second half of the verification gate:
-
-1. **Gate 1: System Invariant Engine (`wb4g-invariants`)**
-   Enforces character invariants (no em dashes), universal Prettier formatting, file boundaries (<400 lines), and brand integrity.
-2. **Gate 2: Visual Sensory Audit (`wb4g-visual-audit`)**
-   Enforces rendering invariants: zero horizontal scroll, zero broken media, zero console exceptions, and mobile touch ergonomics.
-
-Only when both Gate 1 and Gate 2 exit with code `0` is a changeset eligible for pull request or production broadcast.
+Run it after `skill-system-invariant-engine` (text rules) and before release. `skill-safe-deploy` runs both automatically when they are installed side by side, and reports any gate that could not run.

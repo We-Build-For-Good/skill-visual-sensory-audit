@@ -184,3 +184,46 @@ test("detects small touch targets on mobile viewports", async () => {
   assert.equal(mobileRes.touchTargets.smallCount, 1);
   assert.equal(mobileRes.touchTargets.smallTargets[0].selector, "button#tiny-close-button");
 });
+
+// Regression tests for the 2026-10-20 catalogue review. Each one passed a broken page on 1.0.0.
+
+const MOBILE_ONLY = [{ name: "mobile", width: 375, height: 667, isMobile: true }];
+const page = (body, head = "") => `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${head}</head><body>${body}</body></html>`;
+
+test("missing stylesheet and script (HTTP 404) fail the audit", async () => {
+  fs.writeFileSync(path.join(TMP_DIR, "index.html"), page("<h1>Hi</h1>", '<link rel="stylesheet" href="missing.css"><script src="missing.js"></script>'));
+  const report = await runVisualSensoryAudit({ target: TMP_DIR, captureScreenshots: false, viewports: MOBILE_ONLY });
+  assert.equal(report.hasFailures, true);
+  assert.equal(report.failedRequests.length, 2);
+});
+
+test("console.error fails the audit and is counted once, not once per viewport", async () => {
+  fs.writeFileSync(path.join(TMP_DIR, "index.html"), page('<script>console.error("boom")</script>'));
+  const report = await runVisualSensoryAudit({
+    target: TMP_DIR,
+    captureScreenshots: false,
+    viewports: [MOBILE_ONLY[0], { name: "desktop", width: 1440, height: 900 }]
+  });
+  assert.equal(report.consoleErrors.length, 1);
+  assert.equal(report.errorCount, 1);
+});
+
+test("a relative folder path is served (1.0.0 served a 403 page and passed)", async () => {
+  fs.writeFileSync(path.join(TMP_DIR, "index.html"), page("<h1>Hi</h1>"));
+  const report = await runVisualSensoryAudit({ target: path.relative(process.cwd(), TMP_DIR), captureScreenshots: false, viewports: MOBILE_ONLY });
+  assert.equal(report.errorCount, 0);
+  assert.equal(report.documentErrors.length, 0);
+});
+
+test("an entry file that does not exist fails the audit", async () => {
+  fs.writeFileSync(path.join(TMP_DIR, "index.html"), page("<h1>Hi</h1>"));
+  const report = await runVisualSensoryAudit({ target: TMP_DIR, defaultFile: "nothere.html", captureScreenshots: false, viewports: MOBILE_ONLY });
+  assert.equal(report.hasFailures, true);
+  assert.match(report.documentErrors[0].message, /HTTP 404/);
+});
+
+test("lazy-loaded broken images below the fold are found", async () => {
+  fs.writeFileSync(path.join(TMP_DIR, "index.html"), page('<div style="height:3000px"></div><img id="lazy" loading="lazy" src="nope.png" width="10" height="10">'));
+  const report = await runVisualSensoryAudit({ target: TMP_DIR, captureScreenshots: false, viewports: MOBILE_ONLY });
+  assert.equal(report.hasFailures, true);
+});

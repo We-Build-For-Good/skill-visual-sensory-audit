@@ -1,7 +1,7 @@
 {
   "name": "@webuildforgood/skill-visual-sensory-audit",
-  "version": "1.0.0",
-  "description": "Deterministic multi-viewport sensory verification gate detecting horizontal layout blowouts, broken assets, touch target collisions, and console errors.",
+  "version": "2.0.0",
+  "description": "Headless Chrome check at phone, tablet, and desktop widths: fails on pages that do not load, horizontal overflow, broken images, failed requests, and JavaScript errors.",
   "main": "bin/visual-audit.mjs",
   "bin": {
     "wb4g-visual-audit": "bin/visual-audit.mjs"
@@ -14,16 +14,17 @@
   "keywords": [
     "visual-audit",
     "sensory-gate",
-    "playwright",
     "puppeteer",
     "viewport",
     "agentic-ai",
-    "responsive-design",
-    "antigravity"
+    "responsive-design"
   ],
   "author": "We Build for Good",
   "license": "MIT",
   "dependencies": {
     "puppeteer-core": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
